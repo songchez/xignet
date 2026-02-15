@@ -1,0 +1,75 @@
+{
+  "name": "@xignet/x402-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for x402 invoice discovery, verification, and settlement proof validation.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.js",
+      "require": "./dist/protocol.cjs"
+    },
+    "./verification": {
+      "types": "./dist/verification.d.ts",
+      "import": "./dist/verification.js",
+      "require": "./dist/verification.cjs"
+    },
+    "./settlement": {
+      "types": "./dist/settlement.d.ts",
+      "import": "./dist/settlement.js",
+      "require": "./dist/settlement.cjs"
+    },
+    "./errors": {
+      "types": "./dist/errors/index.d.ts",
+      "import": "./dist/errors/index.js",
+      "require": "./dist/errors/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "npm run test:unit && npm run test:contract",
+    "test:unit": "vitest run tests/unit",
+    "test:contract": "vitest run tests/contract",
+    "security": "npm audit --omit=dev --audit-level=high",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish"
+  },
+  "keywords": [
+    "x402",
+    "payments",
+    "typescript",
+    "invoice",
+    "webauthn"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.8.0"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.2",
+    "@types/node": "^22.13.10",
+    "@typescript-eslint/eslint-plugin": "^8.24.1",
+    "@typescript-eslint/parser": "^8.24.1",
+    "eslint": "^9.21.0",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}

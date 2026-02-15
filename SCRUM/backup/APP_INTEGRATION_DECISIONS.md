@@ -1,0 +1,333 @@
+# App Integration Decisions Log
+
+이 문서는 `APP_INTEGRATION_PLANNING_GAPS.md`의 항목별 최종 결정을 기록한다.
+
+## Decision Template
+- Topic:
+- Date:
+- Owner:
+- Status: `DECIDED`
+- Decision:
+- Alternatives Considered:
+- Rationale:
+- Affected Files/RFC:
+- Follow-up Tasks:
+
+---
+
+## D-001 (Placeholder)
+- Topic: TTM Canonicalization Standard
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - `RFC 8785 (JCS) + SHA-256(hex lowercase)`를 `ttmHash` 생성 규격으로 채택한다.
+- Alternatives Considered:
+  - 커스텀 canonicalization 유지
+  - 단기 커스텀 + 장기 JCS 마이그레이션
+- Rationale:
+  - 서버/클라이언트/모바일 간 결정적 해시 일치율을 높이고, 감사/법적 증빙 재현성을 확보하기 위함.
+- Affected Files/RFC:
+  - `src/verification.ts`
+  - `SCRUM/06_RFC/RFC-005-transaction-terms-manifest.md`
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+- Follow-up Tasks:
+  - JCS 구현 방식 고정(라이브러리 선정)
+  - 기존 hash와 호환 전략(마이그레이션 플래그) 정의
+  - conformance 테스트에 canonicalization 벡터 추가
+
+## D-002
+- Topic: Amount and Quantity Precision Rules
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - 결제 경로 라운딩은 금지한다.
+  - 외부 입력/표시는 decimal string을 허용한다.
+  - 내부 결제/검증 경로는 atomic integer string(BigInt)만 허용한다.
+  - decimal -> atomic 변환은 통화/자산 scale(ISO-4217 exponent 또는 token decimals)에 의존한다.
+  - scale 초과 소수점은 반올림/버림 없이 즉시 reject 한다.
+  - 정합성은 `lineItem.amount == quantity * unitPrice`, `totalAmount == sum(lineItems)`, `totalAmount <= maxAllowedAmount`를 강제한다.
+- Alternatives Considered:
+  - 결제 경로에서 반올림 허용
+  - decimal을 내부 정산 단위로 직접 사용
+- Rationale:
+  - 결제/승인/정산/감사 경로에서 금액 오차와 분쟁 가능성을 제거하기 위해 최소 단위 정수 계산을 강제한다.
+- Affected Files/RFC:
+  - `SCRUM/06_RFC/RFC-005-transaction-terms-manifest.md`
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `src/types.ts`
+  - `src/verification.ts`
+  - `src/settlement.ts`
+- Follow-up Tasks:
+  - 통화/자산 scale registry 설계
+  - decimal <-> atomic 변환 유틸 추가
+  - precision 위반 케이스 contract tests 추가
+
+## D-003
+- Topic: Unit Taxonomy Standard
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - 단위(unit)는 완전 자유 문자열로 허용한다.
+  - 단위 해석/제약 검증은 서비스/상품 도메인 책임으로 위임한다.
+  - SDK 레벨은 unit 존재(비어있지 않음)만 검증한다.
+- Alternatives Considered:
+  - Core whitelist + extension 네임스페이스
+  - 도메인별 강제 단위 사전
+- Rationale:
+  - 다양한 상품/콘텐츠/자산 모델을 빠르게 수용하기 위해 단위 표준을 최소 강제로 유지한다.
+- Affected Files/RFC:
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `SCRUM/06_RFC/RFC-005-transaction-terms-manifest.md`
+  - `src/types.ts`
+- Follow-up Tasks:
+  - 서비스 레벨 단위 검증 규칙 문서화
+  - unit 오용 탐지를 위한 감사 로그 필드 설계
+
+## D-004
+- Topic: Policy Engine Schema
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - 정책 충돌 시 `deny-overrides`를 적용한다.
+  - 기본 정책 결과는 `deny`로 두고, 명시적 허용 정책으로만 결제를 진행한다.
+  - 정책 평가 순서는 `global -> user -> session/request`로 고정한다.
+  - 평가 결과는 `allow | deny | reasonCode` 형식으로 기록한다.
+- Alternatives Considered:
+  - allow-overrides
+  - priority-based conflict resolution
+- Rationale:
+  - 무단 결제/과결제 리스크를 최소화하기 위해 안전 기본값(deny-by-default)을 채택한다.
+- Affected Files/RFC:
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `SCRUM/06_RFC/RFC-005-transaction-terms-manifest.md`
+  - `src/types.ts`
+- Follow-up Tasks:
+  - 정책 스키마(JSON Schema) 초안 작성
+  - reasonCode taxonomy 정의
+  - policy evaluation contract tests 추가
+
+## D-005
+- Topic: Facilitator Integration Contract
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - timeout은 `verify 3s`, `settle 8s`로 고정한다.
+  - retry는 `verify 최대 2회`, `settle 최대 1회`로 제한한다.
+  - backoff는 `exponential + jitter`를 사용한다.
+  - 에러 매핑은 `4xx=reject(비재시도)`, `5xx/timeout=retry 후보`로 고정한다.
+  - 모든 호출에 `idempotencyKey`, `ttmHash`, `intentId`를 필수 포함한다.
+- Alternatives Considered:
+  - verify/settle 모두 동일 timeout/retry 정책
+  - settle 무제한 재시도
+  - 4xx 일부 재시도 허용
+- Rationale:
+  - settle은 부작용 위험이 높아 재시도 상한을 더 보수적으로 두고, verify는 네트워크 노이즈 흡수를 위해 제한적 재시도를 허용한다.
+- Affected Files/RFC:
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `SCRUM/06_RFC/RFC-003-settlement-proof-model.md`
+  - `src/settlement.ts`
+  - `tests/unit/settlement.test.ts`
+- Follow-up Tasks:
+  - timeout/retry 설정값을 SDK 옵션으로 노출
+  - 에러 코드 매핑 표(reasonCode) 작성
+  - timeout/retry/replay contract tests 추가
+
+## D-006
+- Topic: Order State Machine
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - 상태 집합을 다음으로 고정한다:
+    - `created`
+    - `payment_required`
+    - `approval_pending`
+    - `approved`
+    - `verify_pending`
+    - `verified`
+    - `settle_pending`
+    - `settled`
+    - `order_confirmed`
+    - `failed`
+    - `cancelled`
+  - 종결 상태는 `order_confirmed`, `failed`, `cancelled`로 고정한다.
+  - `approval_pending` 타임아웃은 `cancelled`로 전이한다.
+  - `settle_pending`은 D-005 재시도 정책 소진 후 `failed`로 전이한다.
+  - `order_confirmed` 이후 체인 이상은 즉시 롤백하지 않고 후속 상태(`dispute_open`)로 관리한다.
+- Alternatives Considered:
+  - 단순 상태 모델(confirmed/failed/cancelled만 사용)
+  - confirmed 이후 즉시 롤백 상태 허용
+- Rationale:
+  - 운영 가시성과 장애 대응을 위해 승인/검증/정산 단계를 명시적으로 분리하고, 확정 이후 변경은 분쟁 프로세스로 관리한다.
+- Affected Files/RFC:
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `SCRUM/06_RFC/RFC-003-settlement-proof-model.md`
+  - `src/types.ts`
+  - `src/settlement.ts`
+- Follow-up Tasks:
+  - 상태 전이 테이블(allowed transitions) 문서화
+  - timeout/cancel/failure 이벤트 코드 표준화
+  - state transition contract tests 추가
+
+## D-007
+- Topic: Governance Boundary (Platform vs Developer)
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - 플랫폼은 결제 안전 불변식(invariants)만 고정한다.
+  - 운영 파라미터와 정책 값은 개발자/운영팀 권한으로 위임한다.
+  - SDK는 interface/validation boundary를 제공하고, 값은 외부 설정 주입을 기본으로 한다.
+- Alternatives Considered:
+  - 플랫폼이 정책 값까지 강제
+  - 완전 자유(불변식도 미강제)
+- Rationale:
+  - 책임 경계를 명확히 하면서도 핵심 안전 요구(무단결제/중복/변조 차단)는 유지하기 위함.
+- Affected Files/RFC:
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `SCRUM/00A_PROBLEM_DEFINITION_AND_PLANNING_PRINCIPLES.md`
+- Follow-up Tasks:
+  - configurable 항목 목록 문서화
+  - SDK 옵션 스키마에 policy injection 경로 명시
+
+## D-008
+- Topic: Audit Log and Retention Policy
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - 감사 로그 필드 스키마/무결성 규칙은 플랫폼 표준으로 유지한다.
+  - 보관기간 값(retention)은 개발자/운영팀 정책으로 위임한다.
+  - SDK는 `retentionPolicyId` 참조를 제공하고 정책 값은 외부 레지스트리에서 주입받는다.
+- Alternatives Considered:
+  - 플랫폼이 보관기간을 고정 강제
+  - 로그 스키마까지 완전 위임
+- Rationale:
+  - 컴플라이언스 책임 주체가 다를 수 있어 기간 값은 위임하되, 분쟁 대응을 위한 최소 감사 형식은 통일한다.
+- Affected Files/RFC:
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `SCRUM/10_QUALITY/THREAT_MODEL.md`
+  - `src/types.ts`
+- Follow-up Tasks:
+  - 필수 감사 이벤트 스키마 정의
+  - `retentionPolicyId` 계약 테스트 추가
+
+## D-009
+- Topic: Failure and Manual Operations Runbook
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - 플랫폼은 실패 이벤트 코드 표준과 상태 전이 안전규칙만 고정한다.
+  - 수동 재처리/환불/커뮤니케이션 절차는 개발자/운영팀 정책으로 위임한다.
+  - SDK는 `runbookPolicyId`, `manualActionRequired`, `recommendedAction` 인터페이스만 제공한다.
+  - 종결 상태 이후 무단 자동 재시도는 금지하고, 수동 조치는 운영 승인 체계에서 수행한다.
+- Alternatives Considered:
+  - 플랫폼이 Runbook 절차 전체를 강제
+  - Runbook 관련 규칙 전면 비표준
+- Rationale:
+  - 운영 조직별 프로세스 차이를 허용하면서도, 결제 안전 불변식과 장애 대응 최소 일관성은 유지하기 위함.
+- Affected Files/RFC:
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `SCRUM/12_RISK_REGISTER.md`
+  - `src/types.ts`
+- Follow-up Tasks:
+  - failure reasonCode taxonomy 확정
+  - `recommendedAction` enum 및 계약 테스트 추가
+
+## D-010
+- Topic: Legal Consent Artifact Scope
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - 플랫폼은 최소 증빙 필드(`ttmHash`, `termsVersion`, `approvedAt`, `authMethod`, `signerContextRef`, `consentArtifactId`)만 강제한다.
+  - 관할/문구/규제 세부값은 개발자/운영팀 정책으로 위임한다.
+  - SDK는 `legalPolicyId` 참조 인터페이스를 제공하고 정책 값은 외부 설정으로 주입한다.
+  - 최소 증빙 필드가 누락되면 결제를 차단한다.
+- Alternatives Considered:
+  - 플랫폼이 법적 문구/관할까지 강제
+  - CR 스키마를 전면 위임
+- Rationale:
+  - 법적 책임 주체별 요구 차이를 수용하면서도, 최소 증빙 무결성은 표준으로 유지하기 위함.
+- Affected Files/RFC:
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `SCRUM/06_RFC/RFC-005-transaction-terms-manifest.md`
+  - `src/types.ts`
+- Follow-up Tasks:
+  - consent artifact 최소 필드 스키마 확정
+  - legalPolicy 주입 계약 테스트 추가
+
+## D-011
+- Topic: WebAuthn Operational Policy
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - 플랫폼은 WebAuthn 검증 결과 계약(승인 여부, signer 식별, 시각, `ttmHash` 바인딩)만 강제한다.
+  - RP ID, UV 강도, authenticator 허용 목록, 등록/복구 정책은 개발자/운영팀으로 위임한다.
+  - SDK는 `webauthnPolicyId` 참조를 제공하고 운영값은 외부 설정으로 주입한다.
+  - 정책 누락 시 기본 동작은 `fail-closed`로 한다.
+- Alternatives Considered:
+  - 플랫폼이 WebAuthn 운영값까지 강제
+  - WebAuthn 결과 검증도 완전 위임
+- Rationale:
+  - 보안 최소 계약은 유지하면서 조직별 운영/UX 차이를 허용하기 위함.
+- Affected Files/RFC:
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `SCRUM/10_QUALITY/THREAT_MODEL.md`
+  - `src/verification.ts`
+- Follow-up Tasks:
+  - webauthnPolicy 주입 인터페이스 정의
+  - fail-closed 경로 contract tests 추가
+
+## D-012
+- Topic: Settlement Finality and Reorg Policy
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - 플랫폼은 finality 검증 인터페이스와 reorg 이벤트 처리 훅만 고정한다.
+  - confirmations 수, reorg 감시 윈도우, 알림 임계치는 개발자/운영팀으로 위임한다.
+  - 확정 후 이슈는 기본적으로 `dispute_open` 경로로 처리한다.
+  - SDK는 `finalityPolicyId` 기반 설정 주입을 지원한다.
+- Alternatives Considered:
+  - 플랫폼이 체인별 confirmations 값을 고정
+  - reorg 시 즉시 주문 롤백 강제
+- Rationale:
+  - 체인/서비스별 최종성 정책 차이를 수용하면서 주문 무결성 원칙을 유지하기 위함.
+- Affected Files/RFC:
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `SCRUM/06_RFC/RFC-003-settlement-proof-model.md`
+  - `src/settlement.ts`
+- Follow-up Tasks:
+  - finality policy adapter 스키마 정의
+  - reorg event handling tests 추가
+
+## D-013
+- Topic: Idempotency Persistence Policy
+- Date: 2026-02-15
+- Owner: PM + Architecture
+- Status: `DECIDED`
+- Decision:
+  - 플랫폼은 idempotency 의미론(동일 키는 동일 결과)과 원자적 저장 계약(compare-and-set)을 강제한다.
+  - 저장소 종류, TTL, key scope, 보존기간은 개발자/운영팀으로 위임한다.
+  - SDK는 persistence adapter 인터페이스만 제공하고 구현체는 애플리케이션이 주입한다.
+  - 충돌/중복은 표준 reasonCode로 반환한다.
+- Alternatives Considered:
+  - 플랫폼이 스토리지 종류/TTL 강제
+  - idempotency 전체 위임
+- Rationale:
+  - 중복 결제 방지 불변식은 고정하면서 인프라 선택 자유도를 보장하기 위함.
+- Affected Files/RFC:
+  - `APP_INTEGRATION_PLANNING_GAPS.md`
+  - `SCRUM/10_QUALITY/ACCEPTANCE_CRITERIA.md`
+  - `src/settlement.ts`
+- Follow-up Tasks:
+  - persistence adapter 인터페이스 문서화
+  - idempotency collision contract tests 추가
