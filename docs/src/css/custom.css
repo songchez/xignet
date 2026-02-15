@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 35 33% 98%;
+  --foreground: 215 28% 17%;
+  --card: 0 0% 100%;
+  --card-foreground: 215 28% 17%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 215 28% 17%;
+  --primary: 180 100% 20%;
+  --primary-foreground: 48 100% 97%;
+  --secondary: 186 35% 91%;
+  --secondary-foreground: 215 28% 17%;
+  --muted: 40 24% 94%;
+  --muted-foreground: 215 16% 40%;
+  --accent: 44 100% 70%;
+  --accent-foreground: 215 28% 17%;
+  --destructive: 0 74% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 189 15% 80%;
+  --input: 189 15% 80%;
+  --ring: 180 100% 20%;
+  --radius: 0.8rem;
+
+  --ifm-color-primary: hsl(var(--primary));
+  --ifm-color-primary-dark: hsl(180 100% 16%);
+  --ifm-color-primary-darker: hsl(180 100% 14%);
+  --ifm-color-primary-darkest: hsl(180 100% 10%);
+  --ifm-color-primary-light: hsl(180 84% 30%);
+  --ifm-color-primary-lighter: hsl(180 72% 36%);
+  --ifm-color-primary-lightest: hsl(180 58% 46%);
+  --ifm-background-color: hsl(var(--background));
+  --ifm-navbar-background-color: hsl(var(--card));
+  --ifm-footer-background-color: hsl(212 33% 14%);
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(2, 132, 199, 0.08);
+}
+
+[data-theme='dark'] {
+  --background: 210 33% 8%;
+  --foreground: 48 100% 97%;
+  --card: 214 32% 12%;
+  --card-foreground: 48 100% 97%;
+  --popover: 214 32% 12%;
+  --popover-foreground: 48 100% 97%;
+  --primary: 44 100% 70%;
+  --primary-foreground: 212 33% 14%;
+  --secondary: 210 22% 22%;
+  --secondary-foreground: 48 100% 97%;
+  --muted: 212 22% 18%;
+  --muted-foreground: 48 34% 80%;
+  --accent: 186 70% 42%;
+  --accent-foreground: 48 100% 97%;
+  --destructive: 0 63% 44%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 214 18% 32%;
+  --input: 214 18% 32%;
+  --ring: 44 100% 70%;
+
+  --ifm-background-color: hsl(var(--background));
+  --ifm-navbar-background-color: hsl(var(--card));
+  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.12);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply tracking-tight;
+  }
+}
+
+@layer components {
+  .hero-surface {
+    background-image:
+      radial-gradient(circle at 20% 15%, rgba(251, 191, 36, 0.25), transparent 28%),
+      radial-gradient(circle at 80% 30%, rgba(20, 184, 166, 0.25), transparent 33%),
+      linear-gradient(120deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0));
+  }
+}
